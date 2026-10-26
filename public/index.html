@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Swiss Knife File Hub</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --subtext: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 40px 20px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 680px; }
+    header { text-align: center; margin-bottom: 28px; }
+    header h1 { font-size: 1.8rem; font-weight: 700; color: #fff; }
+    header p { color: var(--subtext); font-size: 0.95rem; margin-top: 6px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--subtext); margin-bottom: 8px; }
+    select, input[type="password"], input[type="number"] {
+      width: 100%; background: #0f172a; border: 1px solid var(--border); color: #fff; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 0.95rem;
+    }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    .drop-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius); padding: 36px 20px; text-align: center; cursor: pointer; transition: 0.2s border-color, 0.2s background;
+    }
+    .drop-zone.dragover { border-color: var(--accent); background: rgba(56, 189, 248, 0.05); }
+    .drop-zone p { color: var(--subtext); font-size: 0.9rem; }
+    .hint { color: var(--subtext); font-size: 0.8rem; margin-top: 8px; }
+    .file-input { display: none; }
+    .btn {
+      width: 100%; background: var(--accent); color: #0f172a; border: none; padding: 12px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 1rem; margin-top: 16px;
+    }
+    .btn:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      width: auto; background: transparent; color: var(--subtext); border: 1px solid var(--border); padding: 6px 12px; font-size: 0.8rem; margin-top: 10px;
+    }
+    .btn-secondary:hover:not(:disabled) { color: var(--text); border-color: var(--subtext); background: transparent; }
+    .btn-danger {
+      width: 100%; background: transparent; color: #f87171; border: 1px solid #7f1d1d; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.9rem; margin-top: 0;
+    }
+    .btn-danger:hover:not(:disabled) { background: rgba(248, 113, 113, 0.1); color: #fca5a5; }
+    .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+    .progress-bar { width: 100%; height: 8px; background: #334155; border-radius: 4px; overflow: hidden; margin-top: 16px; display: none; }
+    .progress-bar-inner { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s ease; }
+    .status { margin-top: 12px; font-size: 0.9rem; text-align: center; }
+    .status.error { color: #f87171; }
+    .status a { color: var(--accent); font-weight: 700; text-decoration: underline; }
+    .file-list { margin-top: 12px; font-size: 0.85rem; color: var(--subtext); text-align: left; }
+    .file-list li { list-style: none; padding: 4px 0; word-break: break-all; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Swiss Knife Toolkit</h1>
+    <p>Private, local file operations. Auto-deleted after 30 minutes.</p>
+  </header>
+
+  <div class="card" style="padding: 16px 24px;">
+    <button type="button" id="cleanup-btn" class="btn-danger">Run cleanup now</button>
+    <div class="status" id="cleanup-status"></div>
+  </div>
+
+  <div class="card">
+    <label for="operation">Select Operation</label>
+    <select id="operation">
+      <optgroup label="PDF Tools">
+        <option value="pdf_merge">Merge Multiple PDFs</option>
+        <option value="pdf_compress">Compress PDF</option>
+        <option value="pdf_unlock">Unlock / Remove PDF Password</option>
+      </optgroup>
+      <optgroup label="Images & Video">
+        <option value="image_convert">Convert Image Format</option>
+        <option value="image_strip_exif">Strip Image EXIF Data (Privacy)</option>
+        <option value="video_to_gif">Convert Video Clip to GIF</option>
+      </optgroup>
+    </select>
+
+    <div id="field-pdf-password" hidden>
+      <label for="pdf_pass">PDF Password</label>
+      <input type="password" id="pdf_pass" placeholder="Enter current password" autocomplete="off">
+    </div>
+
+    <div id="field-img-format" hidden>
+      <label for="img_format">Target Format</label>
+      <select id="img_format">
+        <option value="webp">WebP</option>
+        <option value="jpg">JPG</option>
+        <option value="png">PNG</option>
+      </select>
+    </div>
+
+    <div id="field-gif-opts" hidden>
+      <div class="row">
+        <div>
+          <label for="gif_fps">FPS</label>
+          <input type="number" id="gif_fps" min="5" max="24" value="12">
+        </div>
+        <div>
+          <label for="gif_width">Width (px)</label>
+          <input type="number" id="gif_width" min="240" max="800" value="480">
+        </div>
+      </div>
+    </div>
+
+    <div id="drop-area" class="drop-zone" tabindex="0" role="button" aria-label="Upload files">
+      <p id="drop-label">Drag & drop file(s) here or click to browse</p>
+      <p id="drop-hint" class="hint"></p>
+      <input type="file" id="file-input" class="file-input">
+      <ul id="file-list" class="file-list"></ul>
+      <button type="button" id="clear-btn" class="btn btn-secondary" hidden>Clear files</button>
+    </div>
+
+    <button type="button" id="process-btn" class="btn" disabled>Process File</button>
+
+    <div class="progress-bar" id="progress-container">
+      <div class="progress-bar-inner" id="progress-fill"></div>
+    </div>
+    <div class="status" id="status-text"></div>
+  </div>
+</div>
+
+<script>
+  const OPS = {
+    pdf_merge: {
+      accept: '.pdf,application/pdf',
+      multiple: true,
+      minFiles: 2,
+      label: 'Drag & drop PDFs here or click to browse',
+      hint: 'Select at least 2 PDF files',
+      btn: 'Merge PDFs',
+    },
+    pdf_compress: {
+      accept: '.pdf,application/pdf',
+      multiple: false,
+      minFiles: 1,
+      label: 'Drag & drop a PDF here or click to browse',
+      hint: 'One PDF file',
+      btn: 'Compress PDF',
+    },
+    pdf_unlock: {
+      accept: '.pdf,application/pdf',
+      multiple: false,
+      minFiles: 1,
+      label: 'Drag & drop a locked PDF here or click to browse',
+      hint: 'One password-protected PDF',
+      btn: 'Unlock PDF',
+    },
+    image_convert: {
+      accept: 'image/*,.jpg,.jpeg,.png,.webp,.gif,.tif,.tiff,.bmp',
+      multiple: false,
+      minFiles: 1,
+      label: 'Drag & drop an image here or click to browse',
+      hint: 'One image file',
+      btn: 'Convert Image',
+    },
+    image_strip_exif: {
+      accept: 'image/*,.jpg,.jpeg,.png,.webp,.tif,.tiff',
+      multiple: false,
+      minFiles: 1,
+      label: 'Drag & drop an image here or click to browse',
+      hint: 'One image file',
+      btn: 'Strip EXIF',
+    },
+    video_to_gif: {
+      accept: 'video/*,.mp4,.mov,.webm,.mkv,.avi',
+      multiple: false,
+      minFiles: 1,
+      label: 'Drag & drop a video here or click to browse',
+      hint: 'One short video clip works best',
+      btn: 'Convert to GIF',
+    },
+  };
+
+  const opSelect = document.getElementById('operation');
+  const dropArea = document.getElementById('drop-area');
+  const dropLabel = document.getElementById('drop-label');
+  const dropHint = document.getElementById('drop-hint');
+  const fileInput = document.getElementById('file-input');
+  const fileList = document.getElementById('file-list');
+  const clearBtn = document.getElementById('clear-btn');
+  const processBtn = document.getElementById('process-btn');
+  const progressContainer = document.getElementById('progress-container');
+  const progressFill = document.getElementById('progress-fill');
+  const statusText = document.getElementById('status-text');
+  const fieldPass = document.getElementById('field-pdf-password');
+  const fieldImg = document.getElementById('field-img-format');
+  const fieldGif = document.getElementById('field-gif-opts');
+
+  let selectedFiles = [];
+  let busy = false;
+
+  function currentOp() {
+    return OPS[opSelect.value] || OPS.pdf_compress;
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  function setFiles(files) {
+    const op = currentOp();
+    const list = Array.from(files || []);
+    selectedFiles = op.multiple ? list : list.slice(0, 1);
+    renderFileList();
+  }
+
+  function clearFiles() {
+    selectedFiles = [];
+    fileInput.value = '';
+    renderFileList();
+  }
+
+  function updateFormState() {
+    const op = opSelect.value;
+    const cfg = currentOp();
+
+    fieldPass.hidden = op !== 'pdf_unlock';
+    fieldImg.hidden = op !== 'image_convert';
+    fieldGif.hidden = op !== 'video_to_gif';
+
+    fileInput.multiple = cfg.multiple;
+    fileInput.accept = cfg.accept;
+    dropLabel.textContent = cfg.label;
+    dropHint.textContent = cfg.hint;
+    processBtn.textContent = cfg.btn;
+
+    clearFiles();
+    statusText.textContent = '';
+    statusText.className = 'status';
+    progressContainer.style.display = 'none';
+    progressFill.style.width = '0%';
+  }
+
+  function renderFileList() {
+    const cfg = currentOp();
+    fileList.innerHTML = '';
+
+    if (!selectedFiles.length) {
+      clearBtn.hidden = true;
+      processBtn.disabled = true;
+      return;
+    }
+
+    selectedFiles.forEach((f) => {
+      const li = document.createElement('li');
+      li.textContent = `${f.name} (${formatSize(f.size)})`;
+      fileList.appendChild(li);
+    });
+
+    clearBtn.hidden = false;
+    const enough = selectedFiles.length >= cfg.minFiles;
+    processBtn.disabled = busy || !enough;
+
+    if (!enough) {
+      dropHint.textContent = `Need at least ${cfg.minFiles} files (selected ${selectedFiles.length})`;
+    } else {
+      dropHint.textContent = cfg.hint;
+    }
+  }
+
+  opSelect.addEventListener('change', updateFormState);
+
+  ['dragenter', 'dragover'].forEach((name) => {
+    dropArea.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropArea.classList.add('dragover');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach((name) => {
+    dropArea.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropArea.classList.remove('dragover');
+    });
+  });
+
+  dropArea.addEventListener('drop', (e) => {
+    if (busy) return;
+    setFiles(e.dataTransfer.files);
+  });
+
+  dropArea.addEventListener('click', (e) => {
+    if (busy) return;
+    if (e.target === clearBtn || clearBtn.contains(e.target)) return;
+    fileInput.click();
+  });
+
+  dropArea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (!busy) fileInput.click();
+    }
+  });
+
+  fileInput.addEventListener('click', (e) => e.stopPropagation());
+  fileInput.addEventListener('change', () => setFiles(fileInput.files));
+
+  clearBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!busy) clearFiles();
+  });
+
+  function setBusy(state) {
+    busy = state;
+    processBtn.disabled = state || selectedFiles.length < currentOp().minFiles;
+    opSelect.disabled = state;
+    clearBtn.disabled = state;
+  }
+
+  processBtn.addEventListener('click', () => {
+    const op = opSelect.value;
+    const cfg = currentOp();
+
+    if (selectedFiles.length < cfg.minFiles) {
+      statusText.textContent = cfg.hint;
+      statusText.className = 'status error';
+      return;
+    }
+
+    if (op === 'pdf_unlock' && !document.getElementById('pdf_pass').value) {
+      statusText.textContent = 'Enter the PDF password.';
+      statusText.className = 'status error';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', op);
+
+    if (op === 'pdf_merge') {
+      selectedFiles.forEach((f) => formData.append('files[]', f));
+    } else {
+      formData.append('file', selectedFiles[0]);
+    }
+
+    if (op === 'pdf_unlock') formData.append('password', document.getElementById('pdf_pass').value);
+    if (op === 'image_convert') formData.append('format', document.getElementById('img_format').value);
+    if (op === 'video_to_gif') {
+      formData.append('fps', document.getElementById('gif_fps').value);
+      formData.append('width', document.getElementById('gif_width').value);
+    }
+
+    progressContainer.style.display = 'block';
+    progressFill.style.width = '0%';
+    statusText.textContent = 'Uploading…';
+    statusText.className = 'status';
+    setBusy(true);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api.php');
+
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const percent = Math.round((e.loaded / e.total) * 85);
+      progressFill.style.width = percent + '%';
+      statusText.textContent = `Uploading… ${percent}%`;
+    };
+
+    xhr.upload.onload = () => {
+      progressFill.style.width = '90%';
+      statusText.textContent = 'Processing…';
+    };
+
+    xhr.onload = () => {
+      progressFill.style.width = '100%';
+      setBusy(false);
+
+      let res;
+      try {
+        res = JSON.parse(xhr.responseText);
+      } catch (err) {
+        statusText.textContent = 'Server response parse error.';
+        statusText.className = 'status error';
+        return;
+      }
+
+      if (xhr.status === 200 && res.download_id) {
+        const href = `download.php?id=${encodeURIComponent(res.download_id)}&name=${encodeURIComponent(res.filename || 'download')}`;
+        statusText.className = 'status';
+        statusText.replaceChildren();
+        statusText.append('Done! ');
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = res.filename || 'download';
+        a.textContent = 'Download result';
+        statusText.appendChild(a);
+      } else {
+        statusText.textContent = res.error || 'Operation failed.';
+        statusText.className = 'status error';
+      }
+    };
+
+    xhr.onerror = () => {
+      setBusy(false);
+      statusText.textContent = 'Network error occurred.';
+      statusText.className = 'status error';
+    };
+
+    xhr.send(formData);
+  });
+
+  const cleanupBtn = document.getElementById('cleanup-btn');
+  const cleanupStatus = document.getElementById('cleanup-status');
+
+  cleanupBtn.addEventListener('click', () => {
+    if (!confirm('Run cleanup? Removes uploads/outputs older than 30 minutes.')) return;
+
+    cleanupBtn.disabled = true;
+    cleanupStatus.className = 'status';
+    cleanupStatus.textContent = 'Running cleanup…';
+
+    fetch('cleanup.php', { method: 'POST' })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Cleanup failed.');
+        cleanupStatus.textContent = data.message || 'Cleanup completed.';
+      })
+      .catch((err) => {
+        cleanupStatus.className = 'status error';
+        cleanupStatus.textContent = err.message || 'Cleanup failed.';
+      })
+      .finally(() => {
+        cleanupBtn.disabled = false;
+      });
+  });
+
+  updateFormState();
+</script>
+</body>
+</html>
